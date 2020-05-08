@@ -1505,6 +1505,8 @@ my class HyperOptimizer {
     has $!target-index;
     has $!target-limit;
 
+    has $!reversed-index-var;
+
     has $!loop-limit-calc-node;
 
     has %!local-vars;
@@ -2064,6 +2066,39 @@ my class HyperOptimizer {
 
         return nqp::null;
     }
+    
+    method get-reversed-index() {
+        #if $!reversed-index-var {
+            #return $!reversed-index-var.shallow_clone;
+        #}
+        #else {
+            #$!reversed-index-var := 
+        #}
+        return QAST::Op.new(:op<sub_i>, QAST::IVal.new(:value(-1)),
+                QAST::Var.new(:name($*IDX.name), :scope("local"), :returns(int)));
+    }
+
+    method handle-method-call($node) {
+        my $methname := $node.name;
+        my $orig-idx := $*IDX;
+        my $reversed-index-op;
+        if $methname eq 'reverse' {
+            # put this in a separate block so $*IDX doesn't get come from
+            # the block a few lines further down
+            $reversed-index-op := self.get-reversed-index();
+        }
+        if $methname eq 'reverse' {
+            my $*IDX := $orig-idx =:= $!target-index
+                ?? $reversed-index-op
+                !! $!target-index;
+            self.handle-node($node[0]);
+        }
+        else {
+            self.noteup("don't know how to handle this method");
+            self.notedown();
+            return nqp::null;
+        }
+    }
 
     method handle-array-var($node) {
         my $primspec := self.check-array-type($node);
@@ -2082,7 +2117,7 @@ my class HyperOptimizer {
 
         return QAST::Op.new(:op("atpos_" ~ @prim_suf[$primspec]), :returns(@prim_obj[$primspec]),
                 $sourcenode,
-                QAST::Var.new(:name($*IDX.name), :scope("local"), :returns(@prim_obj[$primspec])),
+                $*IDX.shallow_clone
             ).annotate_self("sizemode", nqp::hash("source", $sourcenode, "mode", "array"));
     }
 
@@ -2118,8 +2153,8 @@ my class HyperOptimizer {
                     return self.handle-hyper-methodcall($node);
                 }
                 else {
-                    self.notedown("don't know how to handle method call with name " ~ $node.name);
-                    return nqp::null;
+                    self.note("handling a method call with name " ~ $node.name);
+                    return self.handle-method-call($node);
                 }
                 #elsif nqp::existskey($node.name, 
             }
