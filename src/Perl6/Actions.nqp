@@ -9948,7 +9948,7 @@ class Perl6::Actions is HLL::Actions does STDActions {
     }
 
     sub when_handler_helper($when_block) {
-        unless nqp::existskey(%*HANDLERS, 'SUCCEED') {
+        unless nqp::existskey(%*HANDLERS, 'SUCCEED') || nqp::existskey(%*HANDLERS, 'CONTROL') {
             %*HANDLERS<SUCCEED> := QAST::Op.new(
                 :op('p6return'),
                 wrap_return_type_check(
